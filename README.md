@@ -1,5 +1,5 @@
-# kitti-eval-python
-Fast kitti eval in python(finish eval in less than 10 second), only support 2d/bev/3d eval for now.
+# kitti-object-eval-python
+Fast kitti object detection eval in python(finish eval in less than 10 second), only support 2d/bev/3d eval for now.
 ## Dependencies
 Only support Anaconda with python 3.6+, need `numpy`, `skimage`, `numba` and `cudatoolkit`
 ```
@@ -27,7 +27,7 @@ def _get_mAP(prec):
     return sums / 11 * 100
 
 mAP_0_7 = [[0.7, 0.5, 0.5], [0.7, 0.5, 0.5], [0.7, 0.5, 0.5]]
-print("mAP@0.7, 0.5, 0.5:")
+print("mAP@0.7, 0.7, 0.7:")
 prec_easy_bbox = eval_class(gt_annos, dt_annos, 0, 0, 0, mAP_0_7)
 prec_mod_bbox = eval_class(gt_annos, dt_annos, 0, 1, 0, mAP_0_7)
 prec_hard_bbox = eval_class(gt_annos, dt_annos, 0, 2, 0, mAP_0_7)
