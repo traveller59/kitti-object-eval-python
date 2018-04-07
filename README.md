@@ -16,6 +16,12 @@ gt_split_file = "/path/to/val.txt" # from https://xiaozhichen.github.io/files/mv
 val_image_ids = _read_imageset_file(gt_split_file)
 gt_annos = kitti.get_label_annos(gt_path, val_image_ids)
 
+def _get_mAP(prec):
+    sums = 0
+    for i in range(0, len(prec), 4):
+        sums += prec[i]
+    return sums / 11 * 100
+
 mAP_0_7 = [[0.7, 0.5, 0.5], [0.7, 0.5, 0.5], [0.7, 0.5, 0.5]]
 print("mAP@0.7, 0.5, 0.5:")
 prec_easy_bbox = eval_class(gt_annos, dt_annos, 0, 0, 0, mAP_0_7)
