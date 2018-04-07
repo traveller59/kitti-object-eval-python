@@ -313,7 +313,7 @@ def get_label_anno(label_path):
     if len(content) != 0 and len(content[0]) == 16:  # have score
         annotations['score'] = np.array([float(x[15]) for x in content])
     else:
-        annotations['score'] = np.array([float(x[15]) for x in content]).reshape([-1])
+        annotations['score'] = np.zeros([len(annotations['bbox'])])
     return annotations
 
 def get_label_annos(label_folder, image_ids=None):
