@@ -1,6 +1,10 @@
 # kitti-eval-python
-Fast kitti eval in python(finish eval in less than 10 second)
-
+Fast kitti eval in python(finish eval in less than 10 second), only support 2d/bev/3d eval for now.
+## Dependencies
+Only support Anaconda with python 3.6+, need `numpy`, `skimage`, `numba` and `cudatoolkit`
+```
+conda install -c numba cudatoolkit=x.x  (depend on your cuda version) 
+```
 ## Usage
 ```Python
 import kitti_common as kitti
