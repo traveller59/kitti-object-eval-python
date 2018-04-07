@@ -1,7 +1,7 @@
 import numpy as np
 import numba
 
-from .rotate_iou import rotate_iou_gpu_eval
+from rotate_iou import rotate_iou_gpu_eval
 
 @numba.jit
 def get_thresholds(scores: np.ndarray, num_gt, num_sample_pts=41):
