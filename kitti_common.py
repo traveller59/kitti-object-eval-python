@@ -187,6 +187,18 @@ def filter_kitti_anno(image_anno,
                     np.logical_not(boxes_to_remove)])
     return img_filtered_annotations
 
+def filter_annos_low_score(image_annos, thresh):
+    new_image_annos = []
+    for anno in image_annos:
+        img_filtered_annotations = {}
+        relevant_annotation_indices = [
+            i for i, s in enumerate(anno['score']) if s >= thresh
+        ]
+        for key in anno.keys():
+            img_filtered_annotations[key] = (
+                anno[key][relevant_annotation_indices])
+        new_image_annos.append(img_filtered_annotations)
+    return new_image_annos
 
 def kitti_result_line(result_dict, precision=4):
     prec_float = "{" + ":.{}f".format(precision) + "}"
