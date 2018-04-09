@@ -274,7 +274,7 @@ def compute_statistics(gt_anno,
 
 
 @numba.jit(nopython=True)
-def compute_statistics_v4(overlaps,
+def compute_statistics_jit(overlaps,
                           gt_datas,
                           dt_datas,
                           ignored_gt,
@@ -419,7 +419,7 @@ def fused_compute_statistics(overlaps, pr, gt_nums, dt_nums, dc_nums, gt_datas,
             ignored_gt = ignored_gts[gt_num:gt_num + gt_nums[i]]
             ignored_det = ignored_dets[dt_num:dt_num + dt_nums[i]]
             dontcare = dontcares[dc_num:dc_num + dc_nums[i]]
-            tp, fp, fn, similarity, _ = compute_statistics_v3(
+            tp, fp, fn, similarity, _ = compute_statistics_jit(
                 overlap,
                 gt_data,
                 dt_data,
@@ -577,7 +577,7 @@ def eval_class(gt_annos,
     # start_time = time.time()
 
     for i in range(len(gt_annos)):
-        rets = compute_statistics_v4(
+        rets = compute_statistics_jit(
             overlaps[i],
             gt_datas_list[i],
             dt_datas_list[i],
