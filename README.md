@@ -13,7 +13,7 @@ python evaluate.py --label_path=/path/to/your_gt_label_folder --result_path=/pat
 * python interface:
 ```Python
 import kitti_common as kitti
-from eval import eval_class
+from eval import get_official_eval_result
 def _read_imageset_file(path):
     with open(path, 'r') as f:
         lines = f.readlines()
