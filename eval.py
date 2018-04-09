@@ -1,6 +1,6 @@
 import numpy as np
 import numba
-
+import io as sysio
 from rotate_iou import rotate_iou_gpu_eval
 
 @numba.jit
@@ -138,7 +138,7 @@ def d3_box_overlap_kernel(boxes, qboxes, rinc, criterion=-1):
                     elif criterion == 1:
                         ua = area2
                     else:
-                        ua = 1.0
+                        ua = inc
                     rinc[i, j] = inc / ua
                 else:
                     rinc[i, j] = 0.0
@@ -274,14 +274,13 @@ def compute_statistics(gt_anno,
 
 
 @numba.jit(nopython=True)
-def compute_statistics_v3(overlaps,
+def compute_statistics_v4(overlaps,
                           gt_datas,
                           dt_datas,
                           ignored_gt,
                           ignored_det,
                           dc_bboxes,
                           metric,
-                          current_class,
                           min_overlap,
                           thresh=0,
                           compute_fp=False,
@@ -326,19 +325,18 @@ def compute_statistics_v3(overlaps,
                 continue
             overlap = overlaps[j, i]
             dt_score = dt_scores[j]
-            if (not compute_fp
-                    and (overlap > min_overlap[metric, current_class])
+            if (not compute_fp and (overlap > min_overlap)
                     and dt_score > valid_detection):
                 det_idx = j
                 valid_detection = dt_score
-            elif (compute_fp and (overlap > min_overlap[metric, current_class])
+            elif (compute_fp and (overlap > min_overlap)
                   and (overlap > max_overlap or assigned_ignored_det)
                   and ignored_det[j] == 0):
                 max_overlap = overlap
                 det_idx = j
                 valid_detection = 1
                 assigned_ignored_det = False
-            elif (compute_fp and (overlap > min_overlap[metric, current_class])
+            elif (compute_fp and (overlap > min_overlap)
                   and (valid_detection == NO_DETECTION)
                   and ignored_det[j] == 1):
                 det_idx = j
@@ -377,8 +375,7 @@ def compute_statistics_v3(overlaps,
                         continue
                     if (ignored_threshold[j]):
                         continue
-                    if overlaps_dt_dc[j, i] > min_overlap[metric,
-                                                          current_class]:
+                    if overlaps_dt_dc[j, i] > min_overlap:
                         assigned_detection[j] = True
                         nstuff += 1
         fp -= nstuff
@@ -443,45 +440,30 @@ def fused_compute_statistics(overlaps, pr, gt_nums, dt_nums, dc_nums, gt_datas,
         dt_num += dt_nums[i]
         dc_num += dc_nums[i]
 
-
-def eval_class(gt_annos,
-               dt_annos,
-               current_class,
-               difficulty,
-               metric,
-               min_overlap,
-               num_parts=50):
-    """Kitti eval. Only support 2d/bev/3d eval for now.
+def calculate_iou_partly(gt_annos, dt_annos, metric, num_parts=50):
+    """fast iou algorithm. this function can be used independently to
+    do result analysis. Must be used in CAMERA coordinate system.
     Args:
         gt_annos: dict, must from get_label_annos() in kitti_common.py
         dt_annos: dict, must from get_label_annos() in kitti_common.py
-        current_class: int, 0: car, 1: pedestrian, 2: cyclist
-        difficulty: int. eval difficulty, 0: easy, 1: normal, 2: hard
         metric: eval type. 0: bbox, 1: bev, 2: 3d
-        min_overlap: min overlap. official: [0.7, 0.5, 0.5]
         num_parts: int. a parameter for fast calculate algorithm
-
-    Returns:
-        precision: 1d array. precision for every sample PR point. 
     """
-
     assert len(gt_annos) == len(dt_annos)
-    ignored_gts, ignored_dets, dontcares = [], [], []
-    total_num_valid_gt = 0
-    thresholdss = []
     total_dt_num = np.stack([len(a["name"]) for a in dt_annos], 0)
     total_gt_num = np.stack([len(a["name"]) for a in gt_annos], 0)
     num_examples = len(gt_annos)
     split_parts = get_split_parts(num_examples, num_parts)
     parted_overlaps = []
     example_idx = 0
+    
     for num_part in split_parts:
         gt_annos_part = gt_annos[example_idx:example_idx + num_part]
         dt_annos_part = dt_annos[example_idx:example_idx + num_part]
         if metric == 0:
             gt_boxes = np.concatenate([a["bbox"] for a in gt_annos_part], 0)
             dt_boxes = np.concatenate([a["bbox"] for a in dt_annos_part], 0)
-            overlap_part = image_box_overlap(dt_boxes, gt_boxes)
+            overlap_part = image_box_overlap(gt_boxes, dt_boxes)
         elif metric == 1:
             loc = np.concatenate(
                 [a["location"][:, [0, 2]] for a in gt_annos_part], 0)
@@ -497,7 +479,7 @@ def eval_class(gt_annos,
             rots = np.concatenate([a["rotation_y"] for a in dt_annos_part], 0)
             dt_boxes = np.concatenate(
                 [loc, dims, rots[..., np.newaxis]], axis=1)
-            overlap_part = bev_box_overlap(dt_boxes, gt_boxes).astype(
+            overlap_part = bev_box_overlap(gt_boxes, dt_boxes).astype(
                 np.float64)
         elif metric == 2:
             loc = np.concatenate([a["location"] for a in gt_annos_part], 0)
@@ -510,7 +492,7 @@ def eval_class(gt_annos,
             rots = np.concatenate([a["rotation_y"] for a in dt_annos_part], 0)
             dt_boxes = np.concatenate(
                 [loc, dims, rots[..., np.newaxis]], axis=1)
-            overlap_part = d3_box_overlap(dt_boxes, gt_boxes).astype(
+            overlap_part = d3_box_overlap(gt_boxes, dt_boxes).astype(
                 np.float64)
         else:
             raise ValueError("unknown metric")
@@ -526,11 +508,47 @@ def eval_class(gt_annos,
             gt_box_num = total_gt_num[example_idx + i]
             dt_box_num = total_dt_num[example_idx + i]
             overlaps.append(
-                parted_overlaps[j][dt_num_idx:dt_num_idx + dt_box_num,
-                                   gt_num_idx:gt_num_idx + gt_box_num])
+                parted_overlaps[j][gt_num_idx:gt_num_idx + gt_box_num,
+                                   dt_num_idx:dt_num_idx + dt_box_num])
             gt_num_idx += gt_box_num
             dt_num_idx += dt_box_num
         example_idx += num_part
+
+    return overlaps, parted_overlaps, total_gt_num, total_dt_num
+        
+def eval_class(gt_annos,
+               dt_annos,
+               current_class,
+               difficulty,
+               metric,
+               min_overlap,
+               num_parts=50):
+    """Kitti eval. Only support 2d/bev/3d eval for now.
+    Args:
+        gt_annos: dict, must from get_label_annos() in kitti_common.py
+        dt_annos: dict, must from get_label_annos() in kitti_common.py
+        current_class: int, 0: car, 1: pedestrian, 2: cyclist
+        difficulty: int. eval difficulty, 0: easy, 1: normal, 2: hard
+        metric: eval type. 0: bbox, 1: bev, 2: 3d
+        min_overlap: float, min overlap. official: 
+            [[0.7, 0.5, 0.5], [0.7, 0.5, 0.5], [0.7, 0.5, 0.5]] 
+            format: [metric, class]. choose one from matrix above.
+        num_parts: int. a parameter for fast calculate algorithm
+
+    Returns:
+        precision: 1d array. precision for every sample PR point. 
+    """
+    assert len(gt_annos) == len(dt_annos)
+    ignored_gts, ignored_dets, dontcares = [], [], []
+    num_examples = len(gt_annos)
+    split_parts = get_split_parts(num_examples, num_parts)
+    total_num_valid_gt = 0
+    thresholdss = []
+    # start_time = time.time()
+    rets = calculate_iou_partly(dt_annos, gt_annos, metric, num_parts)
+    overlaps, parted_overlaps, total_dt_num, total_gt_num = rets
+    # print("DEBUG overlap time", time.time() - start_time)
+    # start_time = time.time()
     gt_datas_list = []
     dt_datas_list = []
     total_dc_num = []
@@ -555,19 +573,22 @@ def eval_class(gt_annos,
         gt_datas_list.append(gt_datas)
         dt_datas_list.append(dt_datas)
     total_dc_num = np.stack(total_dc_num, axis=0)
+    # print("DEBUG Clean time", time.time() - start_time)
+    # start_time = time.time()
 
     for i in range(len(gt_annos)):
-        rets = compute_statistics_v3(
+        rets = compute_statistics_v4(
             overlaps[i],
             gt_datas_list[i],
             dt_datas_list[i],
+            # gt_annos[i],
+            # dt_annos[i],
             ignored_gts[i],
             ignored_dets[i],
             dontcares[i],
             metric,
-            min_overlap=np.array(min_overlap),
+            min_overlap=min_overlap,
             thresh=0.0,
-            current_class=current_class,
             compute_fp=False)
         tp, fp, fn, similarity, thresholds = rets
         thresholdss += thresholds.tolist()
@@ -575,6 +596,8 @@ def eval_class(gt_annos,
     thresholds = get_thresholds(thresholdss, total_num_valid_gt)
     thresholds = np.array(thresholds)
     pr = np.zeros([len(thresholds), 4])
+    # print("DEBUG calc stage1 time", time.time() - start_time)
+    # start_time = time.time()
     idx = 0
     for j, num_part in enumerate(split_parts):
         gt_datas_part = np.concatenate(gt_datas_list[idx:idx + num_part], 0)
@@ -594,11 +617,11 @@ def eval_class(gt_annos,
             ignored_gts_part,
             ignored_dets_part,
             metric,
-            min_overlap=np.array(min_overlap),
-            thresholds=thresholds,
-            current_class=current_class)
+            min_overlap=min_overlap,
+            thresholds=thresholds)
         idx += num_part
 
+    # print("DEBUG other time", time.time() - start_time)
     N_SAMPLE_PTS = 41
     precision = np.zeros([N_SAMPLE_PTS])
     recall = np.zeros([N_SAMPLE_PTS])
@@ -667,3 +690,72 @@ def eval_class_v1(gt_annos, dt_annos, current_class, difficulty, metric):
         precision[i] = np.max(precision[i:])
 
     return precision
+
+def do_eval(gt_annos, dt_annos, current_class, min_overlap):
+    mAP_bbox = []
+    for i in range(3):  # i=difficulty
+        prec = eval_class(gt_annos, dt_annos, current_class, i, 0,
+                          min_overlap[0])
+        mAP_bbox.append(get_mAP(prec))
+    mAP_bev = []
+    for i in range(3):
+        prec = eval_class(gt_annos, dt_annos, current_class, i, 1,
+                          min_overlap[1])
+        mAP_bev.append(get_mAP(prec))
+    mAP_3d = []
+    for i in range(3):
+        prec = eval_class(gt_annos, dt_annos, current_class, i, 2,
+                          min_overlap[2])
+        mAP_3d.append(get_mAP(prec))
+    return mAP_bbox, mAP_bev, mAP_3d
+
+
+def print_str(value, *arg, sstream=None):
+    if sstream is None:
+        sstream = sysio.StringIO()
+    sstream.truncate(0)
+    sstream.seek(0)
+    print(value, *arg, file=sstream)
+    return sstream.getvalue()
+
+
+def get_official_eval_result(gt_annos, dt_annos, current_class):
+    mAP_0_7 = np.array([[0.7, 0.5, 0.5], [0.7, 0.5, 0.5], [0.7, 0.5, 0.5]])
+    mAP_0_5 = np.array([[0.7, 0.5, 0.5], [0.5, 0.25, 0.25], [0.5, 0.25, 0.25]])
+    class_to_name = {
+        0: 'Car',
+        1: 'Pedestrian',
+        2: 'Cyclist',
+    }
+    mAPbbox, mAPbev, mAP3d = do_eval(gt_annos, dt_annos, current_class,
+                                     mAP_0_7[:, current_class])
+
+    result = print_str(
+        (f"{class_to_name[current_class]} "
+         "mAP@{:.2f}, {:.2f}, {:.2f}:".format(*mAP_0_7[:, current_class])))
+    result += print_str((f"bbox mAP:{mAPbbox[0]:.2f}, "
+                         f"{mAPbbox[1]:.2f}, "
+                         f"{mAPbbox[2]:.2f}"))
+    result += print_str((f"bev  mAP:{mAPbev[0]:.2f}, "
+                         f"{mAPbev[1]:.2f}, "
+                         f"{mAPbev[2]:.2f}"))
+    result += print_str((f"3d   mAP:{mAP3d[0]:.2f}, "
+                         f"{mAP3d[1]:.2f}, "
+                         f"{mAP3d[2]:.2f}"))
+    mAPbbox, mAPbev, mAP3d = do_eval(gt_annos, dt_annos, current_class,
+                                     mAP_0_5[:, current_class])
+
+    result += print_str(
+        (f"{class_to_name[current_class]} "
+         "mAP@{:.2f}, {:.2f}, {:.2f}:".format(*mAP_0_5[:, current_class])))
+    result += print_str((f"bbox mAP:{mAPbbox[0]:.2f}, "
+                         f"{mAPbbox[1]:.2f}, "
+                         f"{mAPbbox[2]:.2f}"))
+    result += print_str((f"bev  mAP:{mAPbev[0]:.2f}, "
+                         f"{mAPbev[1]:.2f}, "
+                         f"{mAPbev[2]:.2f}"))
+    result += print_str((f"3d   mAP:{mAP3d[0]:.2f}, "
+                         f"{mAP3d[1]:.2f}, "
+                         f"{mAP3d[2]:.2f}"))
+
+    return result
