@@ -429,7 +429,6 @@ def fused_compute_statistics(overlaps, pr, gt_nums, dt_nums, dc_nums, gt_datas,
                 metric,
                 min_overlap=min_overlap,
                 thresh=thresh,
-                current_class=current_class,
                 compute_fp=True)
             pr[t, 0] += tp
             pr[t, 1] += fp
@@ -617,6 +616,7 @@ def eval_class(gt_annos,
             ignored_gts_part,
             ignored_dets_part,
             metric,
+            current_class,
             min_overlap=min_overlap,
             thresholds=thresholds)
         idx += num_part
@@ -709,6 +709,11 @@ def do_eval(gt_annos, dt_annos, current_class, min_overlap):
         mAP_3d.append(get_mAP(prec))
     return mAP_bbox, mAP_bev, mAP_3d
 
+def get_mAP(prec):
+    sums = 0
+    for i in range(0, len(prec), 4):
+        sums += prec[i]
+    return sums / 11 * 100
 
 def print_str(value, *arg, sstream=None):
     if sstream is None:
