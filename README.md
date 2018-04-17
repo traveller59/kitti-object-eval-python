@@ -8,7 +8,7 @@ conda install -c numba cudatoolkit=x.x  (depend on your cuda version)
 ## Usage
 * command interface:
 ```
-python evaluate.py --label_path=/path/to/your_gt_label_folder --result_path=/path/to/your_result_folder --label_split_file=/path/to/val.txt --current_class=0
+python evaluate.py evaluate --label_path=/path/to/your_gt_label_folder --result_path=/path/to/your_result_folder --label_split_file=/path/to/val.txt --current_class=0
 ```
 * python interface:
 ```Python
