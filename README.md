@@ -1,7 +1,7 @@
 # kitti-object-eval-python
-Fast kitti object detection eval in python(finish eval in less than 10 second), only support 2d/bev/3d eval for now.
+Fast kitti object detection eval in python(finish eval in less than 10 second), support 2d/bev/3d/aos. If you use command line interface, numba need some time to compile jit functions.
 ## Dependencies
-Only support python 3.6+, need `numpy`, `skimage`, `numba`, `fire`. If you have Anaconda, just install `cudatoolkit` in anaconda. Otherwise, please reference to this [page](https://github.com/numba/numba#custom-python-environments) to set up cuda for numba.
+Only support python 3.6+, need `numpy`, `skimage`, `numba`, `fire`. If you have Anaconda, just install `cudatoolkit` in anaconda. Otherwise, please reference to this [page](https://github.com/numba/numba#custom-python-environments) to set up llvm and cuda for numba.
 * Install by conda:
 ```
 conda install -c numba cudatoolkit=x.x  (8.0, 9.0, 9.1, depend on your environment) 
