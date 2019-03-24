@@ -589,19 +589,9 @@ def eval_class(gt_annos,
                         precision[m, l, k, i:], axis=-1)
                     if compute_aos:
                         aos[m, l, k, i] = np.max(aos[m, l, k, i:], axis=-1)
-                # use interp to calculate recall
-                current_recalls = np.linspace(0, 1, 41)
-                prec_unique, inds = np.unique(precision[m, l, k], return_index=True)
-                current_recalls = current_recalls[inds]
-                f = interp1d(prec_unique, current_recalls)
-                precs_for_recall = np.linspace(0, 1, 41)
-                max_prec = np.max(precision[m, l, k])
-                valid_prec = precs_for_recall < max_prec
-                num_valid_prec = valid_prec.sum()
-                recall[m, l, k, :num_valid_prec] = f(precs_for_recall[valid_prec])
 
     ret_dict = {
-        "recall": recall, # [num_class, num_difficulty, num_minoverlap, N_SAMPLE_PTS]
+        # "recall": recall, # [num_class, num_difficulty, num_minoverlap, N_SAMPLE_PTS]
         "precision": precision,
         "orientation": aos,
         "thresholds": all_thresholds,
@@ -802,18 +792,6 @@ def get_official_eval_result(gt_annos,
                 mAPaos = ", ".join(f"{v:.2f}" for v in mAPaos)
                 result += print_str(f"aos  AP:{mAPaos}")
 
-            mARbbox = get_mAP_v2(metrics["bbox"]["recall"][j, :, i])
-            mARbbox = ", ".join(f"{v:.2f}" for v in mARbbox)
-            mARbev = get_mAP_v2(metrics["bev"]["recall"][j, :, i])
-            mARbev = ", ".join(f"{v:.2f}" for v in mARbev)
-            mAR3d = get_mAP_v2(metrics["3d"]["recall"][j, :, i])
-            mAR3d = ", ".join(f"{v:.2f}" for v in mAR3d)
-            result += print_str(
-                (f"{class_to_name[curcls]} "
-                 "AR(Average Recall)@{:.2f}, {:.2f}, {:.2f}:".format(*min_overlaps[i, :, j])))
-            result += print_str(f"bbox AR:{mARbbox}")
-            result += print_str(f"bev  AR:{mARbev}")
-            result += print_str(f"3d   AR:{mAR3d}")
 
     return result
 
