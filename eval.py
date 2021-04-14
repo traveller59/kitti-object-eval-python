@@ -531,7 +531,7 @@ def eval_class(gt_annos,
             rets = _prepare_data(gt_annos, dt_annos, current_class, difficulty)
             (gt_datas_list, dt_datas_list, ignored_gts, ignored_dets,
              dontcares, total_dc_num, total_num_valid_gt) = rets
-            for k, min_overlap in enumerate(min_overlaps[:, metric, m]):
+            for k, min_overlap in enumerate(min_overlaps[:, l, m]):
                 thresholdss = []
                 for i in range(len(gt_annos)):
                     rets = compute_statistics_jit(
